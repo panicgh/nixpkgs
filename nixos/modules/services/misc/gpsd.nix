@@ -68,6 +68,16 @@ in {
         '';
       };
 
+      badtime = mkOption {
+        type = types.bool;
+        default = false;
+        description = lib.mdDoc ''
+          Use the time from GPS even when there is no GPS fix. This
+          can be useful when the RTC on the GPS is more reliable
+          than the system clock.
+        '';
+      };
+
       port = mkOption {
         type = types.port;
         default = 2947;
@@ -122,6 +132,7 @@ in {
             -S "${toString cfg.port}"                             \
             ${optionalString cfg.readonly "-b"}                   \
             ${optionalString cfg.nowait "-n"}                     \
+            ${optionalString cfg.badtime "-r"}                    \
             ${optionalString cfg.listenany "-G"}                  \
             ${devices}
         '';
