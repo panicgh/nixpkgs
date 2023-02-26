@@ -4156,6 +4156,11 @@ self: super: with self; {
     inherit (pkgs) graphviz;
   };
 
+  gps = toPythonModule (pkgs.gpsd.override {
+    python3 = python;
+    guiSupport = false;
+  });
+
   gps3 = callPackage ../development/python-modules/gps3 { };
 
   gpsoauth = callPackage ../development/python-modules/gpsoauth { };

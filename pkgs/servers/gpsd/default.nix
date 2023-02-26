@@ -11,7 +11,7 @@
 , libusb1
 , ncurses
 , pps-tools
-, python3Packages
+, python3
 
 # optional deps for GUI packages
 , guiSupport ? true
@@ -42,7 +42,7 @@ stdenv.mkDerivation rec {
   # TODO: render & install HTML documentation using asciidoctor
   nativeBuildInputs = [
     pkg-config
-    python3Packages.wrapPython
+    python3.pkgs.wrapPython
     scons
   ] ++ lib.optionals guiSupport [
     gobject-introspection
@@ -54,7 +54,7 @@ stdenv.mkDerivation rec {
     libusb1
     ncurses
     pps-tools
-    python3Packages.python
+    python3
   ] ++ lib.optionals guiSupport [
     atk
     dbus-glib
@@ -67,9 +67,13 @@ stdenv.mkDerivation rec {
     pango
   ];
 
+  propagatedBuildInputs = [
+    python3.pkgs.pyserial
+  ];
+
   pythonPath = lib.optionals guiSupport [
-    python3Packages.pygobject3
-    python3Packages.pycairo
+    python3.pkgs.pygobject3
+    python3.pkgs.pycairo
   ];
 
   patches = [
@@ -83,7 +87,7 @@ stdenv.mkDerivation rec {
     substituteInPlace SConscript --replace "env['CCVERSION']" "env['CC']"
 
     sconsFlags+=" udevdir=$out/lib/udev"
-    sconsFlags+=" python_libdir=$out/lib/${python3Packages.python.libPrefix}/site-packages"
+    sconsFlags+=" python_libdir=$out/lib/${python3.libPrefix}/site-packages"
   '';
 
   # - leapfetch=no disables going online at build time to fetch leap-seconds
