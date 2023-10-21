@@ -25,6 +25,64 @@ let
   cacert_with_extras = pkgs.cacert.override {
     extraCertificateFiles = [ certs.ca.cert ];
   };
+
+  # The fetchers don't honor the OS trusted CAs as this would be impure.
+  # To make it accept our custom (self-signed) CA, it must be added to cacert.
+  #
+  # Fetch as if the repo was public. This must fail.
+  fetchAsPublic = let
+    fetchFromGitLab = pkgs.fetchFromGitLab.override {
+      fetchgit = pkgs.fetchgit.override {
+        cacert = cacert_with_extras;
+      };
+    };
+  in pkgs.invalidateFetcherByDrvHash fetchFromGitLab {
+    domain = "${domain}";
+    owner = "alice";
+    repo = "test-alice";
+    rev = "refs/heads/master";
+    sha256 = "sha256-HqozwmyEGzXUlSL6zgInlycalxROnD2QOSPRwkrw8sQ=";
+  };
+
+  # The fetchers don't honor the OS trusted CAs as this would be impure.
+  # To make it accept our custom (self-signed) CA, it must be added to cacert.
+  fetchWithRepoScope = let
+    fetchFromGitLab = pkgs.fetchFromGitLab.override {
+      fetchgit = pkgs.fetchgit.override {
+        cacert = cacert_with_extras;
+      };
+    };
+  in pkgs.invalidateFetcherByDrvHash fetchFromGitLab {
+    domain = "${domain}";
+    private = true;
+    # varPrefix: default, no prefix
+    owner = "alice";
+    repo = "test-alice";
+    rev = "refs/heads/master";
+    sha256 = "sha256-HqozwmyEGzXUlSL6zgInlycalxROnD2QOSPRwkrw8sQ=";
+    forceFetchGit = true;
+  };
+
+  # The fetchers don't honor the OS trusted CAs as this would be impure.
+  # To make it accept our custom (self-signed) CA, it must be added to cacert.
+  fetchWithApiScope = let
+    fetchFromGitLab = pkgs.fetchFromGitLab.override {
+      fetchzip = pkgs.fetchzip.override {
+        fetchurl = pkgs.fetchurl.override {
+          cacert = cacert_with_extras;
+        };
+      };
+    };
+  in pkgs.invalidateFetcherByDrvHash fetchFromGitLab {
+    domain = "${domain}";
+    private = true;
+    varPrefix = "MYPREFIX";
+    owner = "alice";
+    repo = "test-alice";
+    rev = "refs/heads/master";
+    sha256 = "sha256-XHNNJr5NrfLMnom2ZQkkhmZ/7q8eOc563N4AbyF3K84=";
+  };
+
 in {
   name = "gitlab-fetch-private";
   meta.maintainers = with lib.maintainers; [ panicgh ];
@@ -172,72 +230,6 @@ in {
         expires_at = null;
       });
 
-      # The fetchers don't honor the OS trusted CAs as this would be impure.
-      # To make it accept our custom (self-signed) CA, it must be added to cacert.
-      #
-      # Fetch as if the repo was public. This must fail.
-      fetchAsPublic = pkgs.writeText "fetch-as-public.nix" ''
-        let
-          pkgs = import <nixpkgs> {};
-          fetchFromGitLab = pkgs.fetchFromGitLab.override {
-            fetchgit = pkgs.fetchgit.override {
-              cacert = ${cacert_with_extras};
-            };
-          };
-        in pkgs.invalidateFetcherByDrvHash fetchFromGitLab {
-          domain = "${domain}";
-          owner = "alice";
-          repo = "test-alice";
-          rev = "refs/heads/master";
-          sha256 = "sha256-HqozwmyEGzXUlSL6zgInlycalxROnD2QOSPRwkrw8sQ=";
-        }
-      '';
-
-      # The fetchers don't honor the OS trusted CAs as this would be impure.
-      # To make it accept our custom (self-signed) CA, it must be added to cacert.
-      fetchWithRepoScope = pkgs.writeText "fetch-with-repo-scope.nix" ''
-        let
-          pkgs = import <nixpkgs> {};
-          fetchFromGitLab = pkgs.fetchFromGitLab.override {
-            fetchgit = pkgs.fetchgit.override {
-              cacert = ${cacert_with_extras};
-            };
-          };
-        in pkgs.invalidateFetcherByDrvHash fetchFromGitLab {
-          domain = "${domain}";
-          private = true;
-          # varPrefix: default, no prefix
-          owner = "alice";
-          repo = "test-alice";
-          rev = "refs/heads/master";
-          sha256 = "sha256-HqozwmyEGzXUlSL6zgInlycalxROnD2QOSPRwkrw8sQ=";
-          forceFetchGit = true;
-        }
-      '';
-
-      # The fetchers don't honor the OS trusted CAs as this would be impure.
-      # To make it accept our custom (self-signed) CA, it must be added to cacert.
-      fetchWithApiScope = pkgs.writeText "fetch-with-api-scope.nix" ''
-        let
-          pkgs = import <nixpkgs> {};
-          fetchFromGitLab = pkgs.fetchFromGitLab.override {
-            fetchzip = pkgs.fetchzip.override {
-              fetchurl = pkgs.fetchurl.override {
-                cacert = ${cacert_with_extras};
-              };
-            };
-          };
-        in pkgs.invalidateFetcherByDrvHash fetchFromGitLab {
-          domain = "${domain}";
-          private = true;
-          varPrefix = "MYPREFIX";
-          owner = "alice";
-          repo = "test-alice";
-          rev = "refs/heads/master";
-          sha256 = "sha256-XHNNJr5NrfLMnom2ZQkkhmZ/7q8eOc563N4AbyF3K84=";
-        }
-      '';
-
       # Wait for all GitLab services to be fully started.
       waitForServices = ''
         gitlab.wait_for_unit("gitaly.service")
@@ -342,9 +334,9 @@ in {
             client.succeed("systemctl restart nix-daemon")
 
         with subtest("Fetch projects"):
-            client.fail("${pkgs.sudo}/bin/sudo -u bob nix-build ${fetchAsPublic}")
+            client.fail("${pkgs.sudo}/bin/sudo -u bob nix-store --realise ${builtins.unsafeDiscardOutputDependency fetchAsPublic.drvPath}")
 
-            client.succeed("${pkgs.sudo}/bin/sudo -u bob nix-build ${fetchWithRepoScope}")
+            client.succeed("${pkgs.sudo}/bin/sudo -u bob nix-store --realise ${builtins.unsafeDiscardOutputDependency fetchWithRepoScope.drvPath}")
 
             client.succeed(""" [ "$(${pkgs.sudo}/bin/sudo -u bob find result/ -type f | wc -l)" = "1" ] """)
 
@@ -361,7 +353,7 @@ in {
                     http://gitlab/api/v4/projects/${aliceProjectId}/repository/files/other-file.txt)" = "201" ]"""
             )
 
-            client.succeed("${pkgs.sudo}/bin/sudo -u bob nix-build ${fetchWithApiScope}")
+            client.succeed("${pkgs.sudo}/bin/sudo -u bob nix-store --realise ${builtins.unsafeDiscardOutputDependency fetchWithApiScope.drvPath}")
 
             client.succeed(""" [ "$(${pkgs.sudo}/bin/sudo -u bob find result/ -type f | wc -l)" = "2" ] """)
        '';
