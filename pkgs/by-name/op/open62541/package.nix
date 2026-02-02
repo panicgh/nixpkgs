@@ -2,12 +2,14 @@
   stdenv,
   lib,
   fetchFromGitHub,
+  fetchpatch2,
   cmake,
   pkg-config,
   check,
   libxcrypt,
   subunit,
   python3Packages,
+  libpcap,
   nix-update-script,
 
   withDoc ? false,
@@ -33,24 +35,30 @@ in
 
 stdenv.mkDerivation (finalAttrs: {
   pname = "open62541";
-  version = "1.4.15";
+  version = "1.5.0";
 
   src = fetchFromGitHub {
     owner = "open62541";
     repo = "open62541";
     rev = "v${finalAttrs.version}";
-    hash = "sha256-g0Kp6kdDyPIS1I4lpHNjQpsKes9l0OBcb+7oMTEwC7s=";
+    hash = "sha256-4Ze3xMOsGylqa4Qz/+SNrl7kRHO4Ng2POUUwBRLDy3k=";
     fetchSubmodules = true;
   };
+
+  patches = [
+    # https://github.com/open62541/open62541/pull/7724
+    (fetchpatch2 {
+      url = "https://github.com/open62541/open62541/commit/7d0f5786972b1d58d780eaf99d1fe8828192a04a.patch?full_index=1";
+      hash = "sha256-Lv4/XJNCDTsDkbG8LfPannEFCANGdTdVLkoAzBGpsAA=";
+    })
+  ];
 
   cmakeFlags = [
     (lib.cmakeFeature "OPEN62541_VERSION" finalAttrs.src.rev)
     (lib.cmakeFeature "UA_NAMESPACE_ZERO" "FULL")
     (lib.cmakeBool "BUILD_SHARED_LIBS" (!stdenv.hostPlatform.isStatic))
 
-    # Note comment near doCheck
     (lib.cmakeBool "UA_BUILD_UNIT_TESTS" finalAttrs.finalPackage.doCheck)
-    (lib.cmakeBool "UA_ENABLE_ALLOW_REUSEADDR" finalAttrs.finalPackage.doCheck)
 
     (lib.cmakeBool "UA_BUILD_EXAMPLES" withExamples)
   ]
@@ -76,16 +84,13 @@ stdenv.mkDerivation (finalAttrs: {
 
   buildFlags = [ "all" ] ++ lib.optional withDoc "doc";
 
-  # Tests must normally be disabled because they require
-  # -DUA_ENABLE_ALLOW_REUSEADDR=ON. The option must not be used in production,
-  # since it is a security risk.
-  # See https://github.com/open62541/open62541/issues/6407
-  doCheck = false;
+  doCheck = true;
 
   checkInputs = [
     check
     libxcrypt
     subunit
+    libpcap
   ];
 
   # Tests must run sequentially to avoid port collisions on localhost
@@ -110,6 +115,13 @@ stdenv.mkDerivation (finalAttrs: {
         "check_pubsub_multiple_subscribe_rt_levels"
         "check_pubsub_config_freeze"
         "check_pubsub_publish_rt_levels"
+        "check_pubsub_offset"
+        "check_pubsub_custom_state_machine"
+        "check_pubsub_subscribe_msgrcvtimeout"
+        "check_pubsub_encryption"
+        "check_pubsub_encryption_aes256"
+        "check_pubsub_decryption"
+        "check_pubsub_subscribe_encrypted"
 
         # Could not find the interface
         "check_pubsub_connection_ethernet"
@@ -156,20 +168,14 @@ stdenv.mkDerivation (finalAttrs: {
     let
       open62541Full =
         encBackend:
-        (open62541.overrideAttrs (_: {
-          doCheck = true;
-        })).override
-          {
-            withDoc = true;
-            # if withExamples, one of the example currently fails to build
-            #withExamples = true;
-            withEncryption = encBackend;
-          };
+        open62541.override {
+          withDoc = true;
+          # if withExamples, one of the example currently fails to build
+          #withExamples = true;
+          withEncryption = encBackend;
+        };
     in
     {
-      open62541WithTests = finalAttrs.finalPackage.overrideAttrs (_: {
-        doCheck = true;
-      });
       open62541Full = open62541Full false;
       open62541Full-openssl = open62541Full "openssl";
       open62541Full-mbedtls = open62541Full "mbedtls";
