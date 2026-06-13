@@ -26,9 +26,6 @@ let
       python310 = import ./3.10-pdf-a4.nix {
         inherit stdenv fetchurl lib;
       };
-      python314 = import ./3.14-pdf-a4.nix {
-        inherit stdenv fetchurl lib;
-      };
     };
     pdf_letter = {
       recurseForDerivations = true;
